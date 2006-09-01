@@ -1,0 +1,7 @@
+2006-09-21 0.3.2
+
+	* make ExtUtils::MakeMaker::Coverage use conditional
+
+2005-05-26 0.1
+
+	* first release

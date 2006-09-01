@@ -1,0 +1,43 @@
+#!/usr/bin/perl
+# $Id: collatemaf,v 1.1 2005/04/26 09:55:09 rousse Exp $
+# collate several maf files
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use Lingua::MAF;
+use XML::Twig;
+use IO::File;
+use List::Util qw/max/;
+use List::MoreUtils qw/all any/;
+
+my (@format, $verbose);
+GetOptions(
+    'format=s' => \@format,
+    'verbose'  => \$verbose
+);
+
+my $maf = Lingua::MAF->new(
+    author   => 'mergemaf',
+    language => 'french',
+    format   => { map { $_ => 1 } @format }
+);
+
+die "no file given, aborting" unless @ARGV;
+
+my (@documents, $found);
+foreach my $arg (@ARGV) {
+    next unless -r $arg;
+
+    my $twig = XML::Twig->new(
+	TwigHandlers => {
+	    fsm => sub {
+		$maf->paste_fsm_twig($_[1]);
+	    }
+	}
+    );
+    $twig->parsefile($arg);
+}
+
+$maf->flush_document();

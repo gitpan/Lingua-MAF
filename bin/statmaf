@@ -1,0 +1,74 @@
+#!/usr/bin/perl
+
+use strict;
+use XML::Twig;
+
+my $fsm_count = 0;
+
+my $in = XML::Twig->new(
+    TwigHandlers => {
+	fsm => \&fsm
+    }
+);
+$in->parse(\*STDIN);
+
+sub fsm {
+    my ($twig, $fsm) = @_;
+
+    $fsm_count++;
+
+    my $path_count = 1;
+    my $token_count = 0;
+    my $transitions_count = 0;
+
+    my @transitions;
+    foreach my $child ($fsm->children()) {
+	if ($child->name() eq 'transition') {
+	    push(@transitions, $child);
+	    $transitions_count++;
+	} else {
+	    $token_count++;
+	    if (@transitions) {
+		if (@transitions != 1) {
+		    # index transitions
+		    my $transitions;
+		    my $first = $transitions[0]->att('source');
+		    my $last = $transitions[0]->att('target');
+		    foreach my $transition (@transitions) {
+			# compute index number of tokens this transition bind
+			my $source = $transition->att('source');
+			my $target = $transition->att('target');
+			push(@{$transitions->[$source]}, $target);
+			$first = $source if $source < $first;
+			$last = $target if $target > $last;
+		    }
+		    $path_count = $path_count * count_path($transitions, $first, $last);
+		}
+
+		@transitions = ();
+	    }
+	}
+    }
+
+    my $ambiguity = ($path_count  ** (1 / $token_count)) - 1;
+
+    print join("\t", $fsm_count, $token_count, $transitions_count, $path_count, $ambiguity) . "\n";
+
+    $twig->purge();
+}
+
+sub count_path {
+    my ($transitions, $current, $last) = @_;
+
+    my $count = 0;
+
+    if ($current == $last) {
+	$count = 1;
+    } else {
+	foreach my $child (@{$transitions->[$current]}) {
+	    $count += count_path($transitions, $child, $last);
+	}
+    }
+
+    return $count;
+}

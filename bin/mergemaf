@@ -1,0 +1,212 @@
+#!/usr/bin/perl
+# $Id: mergemaf,v 1.13 2005/11/10 10:15:16 rousse Exp $
+# merge two maf files
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use Lingua::MAF;
+use XML::Twig;
+use IO::File;
+use List::Util qw/min max/;
+use List::MoreUtils qw/all any/;
+
+my (@format, $verbose);
+GetOptions(
+    'format=s' => \@format,
+    'verbose'  => \$verbose
+);
+
+my $maf = Lingua::MAF->new(
+    author   => 'mergemaf',
+    language => 'french',
+    format   => { map { $_ => 1 } @format }
+);
+
+die "no file given, aborting" unless @ARGV;
+
+my (@documents, $found);
+foreach my $arg (@ARGV) {
+    next unless -r $arg;
+
+    my $file = IO::File->new($arg);
+
+    my $twig = XML::Twig->new(
+        TwigHandlers => {
+            fsm => sub { $found = $_[1]; }
+        }
+    );
+    $twig->parse_start();
+
+    push(@documents, {
+        file => $file,
+        twig => $twig
+    });
+}
+
+while (@documents) {
+    my (@structs, %tokens, $tokens_count);
+    for (my $i = 0; $i <= $#documents; $i++) {
+        my $twig = $documents[$i]->{twig};
+        my $file = $documents[$i]->{file};
+        while (my $line = <$file>) {
+            $twig->parser()->parse_more($line);
+            if ($found) {
+                $twig->purge();
+                last;
+            }
+        }
+        if ($found) {
+            if ($tokens_count) {
+                my $count = $found->children_count('token');
+                die "different tokens number found: document 0 has $tokens_count tokens whereas document $i has $count tokens" unless $count == $tokens_count;
+            } else {
+                my $i = 0;
+                # add tokens immediatly for first document
+                foreach my $token ($found->children('token')) {
+                    my $id = $token->att('id');
+                    $maf->add_token(
+                        id      => $id,
+                        content => $token->text()
+                    );
+                    $tokens{$id} = $i++;
+                }
+                $tokens_count = scalar keys %tokens;
+            }
+
+            # index transitions for each document
+            my $transitions;
+            foreach my $transition ($found->children('transition')) {
+                my @tokens = split(/ /, $transition->first_child()->att('tokens'));
+                # compute index number of tokens this transition bind
+                my $from = $tokens{$tokens[0]};
+                my $to   = $tokens{$tokens[-1]} + 1;
+                push(
+                    @{$transitions->[$from]->[$to]},
+                    $transition
+                );
+            }
+            push(@structs, {
+                id          => $i,
+                transitions => $transitions,
+                from        => 0, # token index
+                to          => 0, # token index
+                target      => 0, # transition index
+                offset      => 0, # transition index offset
+            });
+            $found = undef;
+        } else {
+            eval {
+                $documents[$i]->{twig}->parser()->parse_done();
+            };
+            if ($@) {
+                die "Abnormal document $i termination: $@";
+            } else {
+                print STDERR "closing document $i\n" if $verbose;
+            }
+            $documents[$i]->{file}->close();
+            splice(@documents, $i, 1);
+            $i--;
+        }
+    }
+
+    if ($tokens_count) {
+        print STDERR "new merging sequence\n" if $verbose;
+
+        my $to = 1;
+        while ($to <= $tokens_count)  {
+            print STDERR "new pumping sequence\n" if $verbose;
+
+            # for each document, move upper interval limit to the next
+            # internal fsm end until common upper interval limit is reached
+            foreach my $struct (@structs) {
+                print STDERR "document $struct->{id}\n" if $verbose;
+                print STDERR "start interval: $struct->{from} .. $struct->{to}\n" if $verbose;
+
+                my $i = $struct->{to};
+                $struct->{to} = $to;
+                print STDERR "setting upper interval limit to: $struct->{to}\n" if $verbose;
+
+                # check all other transitions starting from interval
+                while ($i < $struct->{to}) {
+                    my $to = $#{$struct->{transitions}->[$i]};
+                    # push interval end if needed
+                    if ($to > $struct->{to}) {
+                        $struct->{to} = $to;
+                        print STDERR "extending upper interval limit to: $struct->{to}\n" if $verbose;
+                    }
+                    $i++;
+                }
+
+                print STDERR "end interval: $struct->{from} .. $struct->{to}\n" if $verbose;
+                $to = $struct->{to};
+            }
+
+            # purge local queues once they reached same token
+            # aligning transitions target on the fly
+            if (all { $_->{to} == $to } @structs) {
+                print STDERR "all queues aligned on token $to, merging\n" if $verbose;
+                # index all transitions in a single flat list
+                foreach my $struct (@structs) {
+                    for my $i ($struct->{from} .. $struct->{to} - 1) {
+                        for my $j (0 .. $#{$struct->{transitions}->[$i]}) {
+                            my $transitions = $struct->{transitions}->[$i]->[$j];
+                            next unless $transitions;
+                            push(@{$struct->{list}}, @{$transitions});
+                        }
+                    }
+                    print STDERR "document $struct->{id}: " . scalar @{$struct->{list}} . " transitions\n" if $verbose;
+                }
+
+                # get each set of transitions span
+                my $span = 0;
+                foreach my $struct (@structs) {
+                    my $min =
+                        min
+                        map { $_->att('source') }
+                        @{$struct->{list}};
+                    my $max =
+                        max
+                        map { $_->att('target') }
+                        @{$struct->{list}};
+                    $struct->{span} = $max - $min;
+                    $span = $struct->{span} if $struct->{span} > $span;
+                }
+                print STDERR "max transition span: $span\n" if $verbose;
+
+                # add transitions
+                foreach my $struct (@structs) {
+                    for my $i (0 .. $#{$struct->{list}}) {
+
+                        my $transition = $struct->{list}->[$i];
+                        my $source = $transition->att('source') + $struct->{offset};
+                        # special case for last transition
+                        if ($i == $#{$struct->{list}} && $struct->{span} != $span) {
+                            # introduce offset if needed
+                            $struct->{offset} += $span - $struct->{span};
+                            print STDERR "setting offset in document $struct->{id} to $struct->{offset}\n" if $verbose;
+                        }
+                        my $target = $transition->att('target') + $struct->{offset};
+                        my $word_form = $transition->first_child();
+                        $maf->add_word_form(
+                            source => $source,
+                            target => $target,
+                            tokens => [ split(/\s+/, $word_form->att('tokens')) ],
+                            form   => $word_form->att('form'),
+                            entry  => $word_form->att('entry'),
+                            tag    => $word_form->att('tag'),
+                            author => $word_form->att('author'),
+                        );
+                    }
+                    $struct->{from} = $struct->{to};
+                    $struct->{list} = undef;
+                }
+                $to++;
+            }
+        }
+
+        $maf->flush_fsm();
+    }
+}
+$maf->flush_document();

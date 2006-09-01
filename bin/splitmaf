@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+
+use strict;
+use XML::Twig;
+use Getopt::Long;
+
+my $base = 'file';
+my $count = 0;
+GetOptions(
+    'base=s' => \$base,
+);
+
+my $in = XML::Twig->new(
+    TwigHandlers => {
+	fsm => \&fsm
+    }
+);
+$in->parse(\*STDIN);
+
+sub fsm {
+    my ($twig, $fsm) = @_;
+
+    $fsm->cut();
+
+    $count++;
+    my $file = $base . $count . '.xml';
+
+    open(FILE, ">$file") or die "Can't open $file: $!";
+    my $out = XML::Twig->new(
+	pretty_print    => 'indented',
+	output_encoding => 'ISO-8859-1',
+    );
+
+    $out->set_root($fsm);
+    $out->flush(\*FILE);
+    close(FILE);
+
+    $in->purge();
+}

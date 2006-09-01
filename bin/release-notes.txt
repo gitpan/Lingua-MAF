@@ -1,0 +1,307 @@
+Installation
+=============
+DrakX is now able to detect and upgrade a Conectiva 10, by replacing packages with their Mandriva equivalent, and migrate the configuration. Some work may still be needed for third party packages.
+
+Migration from Conectiva 10 to Mandriva 2006
+--------------------------------------------
+
+Backup your system!
+
+As in any migration/installation, is highly recommended that you backup your system files before proceed the installation. See below for more details regarding the migration and how your files can be affected.
+
+How the migration works
+
+In a few steps, for the impatient:
+
+   1. the Mandriva installer detects your Conectiva 10 installation;
+   2. some configuration files are fixed;
+   3. it gets a list of all packages installed on your system and then discover which packages are equivalent in Mandriva;
+   4. remove the old packages;
+   5. install the new ones; and then
+   6. proceed the normal Mandriva installation and configuration.
+
+Details about the migration
+
+Changes in /etc/group
+
+There are three new groups in Mandriva: usb, tape and nogroup. These groups are added before the installation process and care is taken if the GID of some of the groups already exists. Also, the file is sorted to ease the readability (is this really needed? may be someone won't like to see his groups scrambled with the system groups..).
+
+About configuration files and others
+
+Usually, configuration files when packaged in an RPM are marked as %config(noreplace), so:
+
+    * when installing new packages, and a given configuration file to be installed already exists, it is created with the .rpmnew suffix in the name, after that the system administrator choose which file to use;
+    * when removing packages, all configuration files that have been changed are renamed to originalfilename.rpmsave.
+
+But binaries and other shared files usually are not marked as noreplace. So before migrate your system, check if there are any critical files that are not part of any package and can be replaced by some other package.
+
+Read the migration log
+
+A lot of useful information can be found in the logs of the migration. You can check which packages were removed and installed and what has been changed on your system by the Mandriva installer.
+
+Desktop
+=======
+Generic (X)
+-----------
+ABI Compatibility between different compilers (mainly gcc-cpp/libstdc++)
+------------------------------------------------------------------------
+There are some ABI (Application Binary Interface) compatibility problems between programs compiled against different versions of gcc-cpp/libstdc++, mainly scim and other precompiled binary programs, such as RealPlayer, Adobe Reader, Opera, etc. We can't do anything but wait for those closed-source applications to be built with a newer version of gcc-cpp/libstdc++. A workaround for this issue is to modify the launch scripts of certain programs to something like GTK_IM_MODULE=xim realplayer, QT_IM_MODULE=xim opera, etc.
+
+ssh-agent no longer started by xinitrc
+--------------------------------------
+Since ssh-agent and gpg-agent are not only usable in X (bug_small.png Bug #12750), ssh-agent startup has been removed from xinitrc. Keychain (which works in the console as well) should be used as a replacement (install keychain, and run it once as user, and it will load ssh and/or GPG keys at the next login) once it is available in main.
+
+Mozilla Firefox
+---------------
+During our test, we discovered the latest version of Java Plugin 1.4.2 (1.4.2_09) packaged by Sun is always crashing Firefox (as well as Mozilla, Epiphany or Galeon) at startup. We recommend to upgrade to Java Plugin 1.5.0_04 or to downgrade to version 1.4.2_07 or use Mandriva packages, available from Mandriva Club.
+
+Default launch in ~/Desktop
+---------------------------
+Starting with Mandriva Linux 2006, applications started by GNOME panel or KDE kicker start in ~/Desktop. If you want to revert to the previous behaviour (start in $HOME), just create an empty file called ~/.mdk-no-desktop-launch
+
+Default folder for documents
+----------------------------
+A set of directories (Video, Music, Download) will be created in the home directory of a user when (s)he logs in for the first time. These directories can be safely removed and will not be created again. ( see /etc/X11/xinit.d/desktop-directories ).
+
+For people who do not want this feature, an empty directory called ~/.mdk-folders should be created before the upgrade or the first login. You can also add it to /etc/skel, if you don't wish to use this for new users.
+
+KDE
+===
+Desktop search (KAT)
+--------------------
+KAT is a desktop search engine that can quickly find files by matching the provided keywords with files' metadata. It uses a light database to index and retrieve metadata. KAT is included and launched by default. Of course, if you think it shouldn't be launched automatically, please create an empty file ~/.mdv-no_kat
+
+GNOME
+=====
+XRenderComposite acceleration disabled by default in Cairo
+----------------------------------------------------------
+During our tests, we discovered performance issues with XRenderComposite acceleration for several graphics cards (NVidia, Radeon) (bug_small.png Bug #17723 and bug_small.png Bug #18270) when refreshing the desktop background and had to disable XRenderComposite in Cairo. If you want to reenable XRenderComposite, add "export CAIRO_ENABLE_XRENDER_COMPOSITE=1" to your environment (~/.bashrc for instance) and restart GNOME. If background refresh is very slow, you should not set this environment variable.
+
+Upgrade from Mandriva Linux 2005 LE to 2006 using urpmi --auto-select
+---------------------------------------------------------------------
+A bug in urpmi from Mandriva Linux 2005 is preventing a smooth update of the GNOME environment. If you upgrade using urpmi --auto-select, the gnome-panel package will be uninstalled during the upgrade instead of being updated. After upgrade, run "urpmi gnome-panel" to restore a fully fonctional GNOME environment.
+
+OpenOffice.org 2.0 and GNOME
+----------------------------
+Mandriva 2006 contains OpenOffice.org 2.0 packages in contrib. There is an openoffice.org-go-ooo-gnome subpackage which enables GNOME integration. You may find that you encounter crashes when opening an Open or Save dialog after installing this subpackage. If so, open the 'Tools' menu, click on 'Options', then click on 'General', then check the "Use OpenOffice.org dialogs" box. This will use OpenOffice.org's native Open and Save dialogs, which will prevent the crashes from occurring.
+
+Networking
+==========
+Easy Wifi
+---------
+net_applet and drakroam have been rewritten to handle roaming between wireless points. net_applet is an applet located in the tray icon that lists wireless networks and connects to them. drakroam is a standalone application that can configure detected access points. See: http://qa.mandriva.com/twiki/bin/view/Main/EasyWifi
+
+Interactive Firewall (IFW)
+--------------------------
+A new interactive firewall is available. It is designed to alert users when an intrusion is attempted on the system, and to watch new connections on some services. When one of these events occurs, a notification bubble appears in the network applet. A box giving more details can be popped up to blacklist or whitelist the remote system. A management tool (drakids) allows to review the logs, and to manage blacklists and whitelists. See: http://qa.mandriva.com/twiki/bin/view/Main/InteractiveFirewall
+
+Shorewall
+---------
+Shorewall, a Netfilter based firewall, has been updated to 2.4.1.
+
+Even if there is a start and stop directive in the shorewall initscript, shorewall is not running all of the time on your system.
+
+shorewall start command runs Netfilter rules as described in your Shorewall configuration files. If there is an error during shorewall start and if you have a saved configuration then that configuration is restored. Otherwise, an implicit shorewall stop is executed.
+
+shorewall stop command does NOT remove all your netfilter rules and opens your firewall for all traffic to pass. It rather places your firewall in a safe state defined by the contents of your /etc/shorewall/routestopped file and the setting of ADMINISABSENTMINDED in /etc/shorewall/shorewall.conf.
+
+If you want to remove all Netfilter rules and open your firewall for all traffic to pass, use the shorewall clear command.
+
+If you change your configuration and want to activate the changes, use the shorewall restart command.
+
+For additional info, see http://www.shorewall.net/starting_and_stopping_shorewall.htm
+
+System
+======
+kernel 2.6.12
+--------------
+The 2.6.12 kernel release is used in Mandriva 2006. When upgrading from a previous release, a 2.6.12 kernel must be installed, because it provides features that are required for other tools to work. The new sysfs registers "modalias" entries which are needed to do coldplug and hotplug with udev. The kernel modules are now renamed when loaded ('-' are replaced by '_'), to stick with the vanilla kernel behavior. Some module-init-tools (modprobe, modinfo, rmmod) won't work anymore with older kernel releases.
+
+Boot optimisation and udev
+--------------------------
+Boot time has been reduced thanks to udev integration. udev is now a complete replacement of hotplug.
+
+See: http://qa.mandriva.com/twiki/bin/view/Main/Udev and: http://qa.mandriva.com/twiki/bin/view/Main/BootTimeOptimisation
+
+DNS configuration support for pam_ldap removed
+In the past, Mandriva has shipped pam_ldap with support (via a patch) for configuration by DNS (basedn would be determined from the domain name if it was not configured in /etc/ldap.conf, and servers to use from DNS SRV record if neither host nor uri are present in the /etc/ldap.conf), however this setup can be abused too easily. nss_ldap and pam_krb5 are configurable by DNS, but can be set up in such a way that they cannot be abused or used to compromise the system, so users are recommended to implement nss_ldap authenticating via the gssapi mechanism, and use pam_krb5 for authentication instead.
+
+If you really need DNS configuration support in pam_ldap, rebuild the pam_ldap SRPM with the "--with dnsconfig" option.
+
+Webmin
+------
+Webmin had the following changes applied:
+
+    * new default theme taken from Conectiva's package, with new colors and icons;
+    * new lynx theme optimized for text-mode administration via lynx;
+    * many Brazilian Portuguese translation fixes.
+
+New urpmi features
+------------------
+Urpmi and ldap
+--------------
+Urpmi can now fetch its media from ldap, using a module called urpmi-ldap. More information on UrpmiLdap.
+
+Restricted urpmi
+----------------
+Urpmi can be run in restricted mode, where not all options are available. See urpmi manpages. An option to prevent package removal ( like basesystem ) was added. See prohibit-remove in man urpmi.cfg
+
+New optional package manager: smart
+-----------------------------------
+Starting with Mandriva 2006, smart (http://smartpm.org) is available in the main repository. Smart is a new package manager developed by Gustavo Niemeyer while he was working at Conectiva. Smart implements an advanced algorithm to resolve dependencies which is able to cope with complex scenarios. A more detailed description of its features can be found in the README file available in the distribution or at the project's site.
+
+The current state of smart in Mandriva is:
+
+    * default channels are still pointing to cooker repositories at the time of this writing. The user has to change them to point to the official Mandriva 2006 repositories after installation;
+    * smart is not the default update tool: urpmi is. But smart can handle urpmi repositories just fine;
+
+Nail instead of mailx
+---------------------
+Mailx has been deprecated in favour of nail, a fork of the previous package. nail command line options are strictly following the unix standard, and may cause some scripts to fail. ( http://sourceforge.net/mailarchive/message.php?msg_id=12475779, http://archives.mandrivalinux.com/cooker/2005-07/msg02294.php ).
+
+Mailx is still available if needed.
+
+Xen
+---
+The Xen VMM (virtual machine monitor) is an open-source project. It enables us to create many virtual machines, each of which runs an instance of an operating system. These guest operating systems can be a patched Linux kernel, or a patched NetBSD?/FreeBSD kernel. User applications can run on guest OSes as they are, without any change in code.
+
+High Avaliability
+-----------------
+Distributed Replicated Block Device (drbd)
+------------------------------------------
+It allows to have a realtime mirror of your local block devices on a remote machine. In conjunction with heartbeat it allows to create HA (high availability) Linux clusters.
+
+Hardware
+========
+HP printers and multi-function devices
+--------------------------------------
+HP provides full support (including ink/toner level check, head cleaning/alignment, ...) for most of their printers and multi-function devices through the HPLIP software.
+
+Printerdrake installs the HPLIP software fully automatically if it detects a supported device connected to the USB or the network (when choosing "Printer directly connected to local network" or "Network printer (TCP/Socket)"). Then it can print and scan (on multi-function devices) as usual and additional functionality is available via the "hp-toolbox" (Menu: System -> Monitoring -> HP Printer Toolbox).
+
+Unfortunately, HPLIP 0.9.4 as it comes with Mandriva Linux 2006 does not support devices on the parallel port yet. Therefore it is recommended to check first whether a connection via the parallel port is still necessary. Check whether the device and your computer have USB connectors and use them if they are there. Use a USB hub if you do not have enough connectors on your computer. If the printer has a network connector, hook it to your local network and if you do not have a local network connect it with a cross cable to the network connector of your PC and configure a mini LAN of these two devices.
+
+If there is no possibility other than connecting your HP printer to the parallel port (parallel-only device), look into the updates, by the time of the release of Mandriva Linux 2006 HPLIP 0.9.5 should already be available, which has limited parallel port support. Install it as well as the new drakxtools package (contains updated printerdrake). Then remove the print queue of your parallel HP printer or multi-function device with printerdrake, and re-add them by either using the "Add Printer" button or stopping and re-starting printerdrake. Now your parallel printer will be set up with HPLIP if supported. Note that the parallel port support of HPLIP is limited. Only the devices marked with "Yes" in the "parallel" column of the device table in /usr/share/doc/hplip-0.9.5/hplip_readme.html are supported. All the others should have a USB connector. Use them on USB then.
+
+If you need the scanner of your parallel multi-function device and there is still no HPLIP update yet, leave it on the parallel port and start printerdrake. The setup will be done with the old HPOJ then. Note that HPOJ is not supported anymore by HP for several months, and especially that it was not intensively tested with the current compilers and 64-bit systems. So be prepared for non-perfect functionality and update to HPLIP 0.9.5 as soon as possible. In principle HPOJ works, but there are the following problems (on the HP LaserJet 3030 - we had no other device for testing - the behaviour is the same for both 32- and 64-bit computers):
+
+    * Scanning is very slow.
+
+    * Sometimes starting a scanning utility causes printing of one page with strange letters. If this happens to you, take the paper out of the printer before scanning and press the "Cancel" button on the front panel of the device before inserting the paper again. Repeat pressing the "Cancel" button if the device still does not show "Ready" on its display. Power-cycle the device if it has no "Cancel" button.
+
+    * Sometimes the scanning software does not find the device. Simply close it and start it again.
+
+    * Sometimes the scanning software reports an I/O error. Repeat the operation in such a case. You do not need to restart the scanning software for that.
+
+Plextor burner
+--------------
+For security reasons the program to burn CD or DVD (cdrecord) is not run with administrator privileges (suid root). However it appears that for some Plextor burners, the cdrecord binary has to be suid root in order to be able to burn. If you cannot burn with your Plextor burner (and potentially other brands), try to give suid root privileges to the cdrecord binary chmod 4755 /usr/bin/cdrecord
+
+Server
+======
+Apache
+------
+Apache has been upgraded to v2.0.54 (stable).
+
+The most significant changes with this release compared to apache2 up to Mandriva Limited Edition 2005:
+
+    * The number two (digit 2) is gone in file and directory names.
+    * apache v2.0.x is now the preferred and standard apache version in Mandriva Linux, support for apache v1.x has been dropped. However you can still install and use apache v1.x (*) from the contribs (apache1-x) but it will require hands on and is not supported.
+    * The previous proxified apache v1.x (*) and mod_perl setup is gone. This package has also been renamed and moved to contribs.
+    * The apache root has been changed from /etc/httpd/2.0 to /etc/httpd
+    * Certain sub packages have new names due to technical difficulties, but also to give them more descriptive names. These are the changes:
+      apache2 -> apache-mpm-prefork (stable)
+      apache2-peruser -> apache-mpm-peruser (experimental)
+      apache2-worker -> apache-mpm-worker (experimental)
+      apache2-common -> apache-base
+      apache2-manual -> apache-doc
+      apache2-metuxmpm is gone, use apache-mpm-peruser instead.
+    * The Apache-AdvancedExtranetServer/%{version} tagging is gone.
+    * The apache module mod_userdir that gives acccess to http://localhost/~username style access is no longer part of the standard install because of security reasons. If you need it, simply install it. (urpmi apache-mod_userdir)
+
+The best practice is to read the apache manual before sending in bugreports, please install apache-doc as follows: urpmi apache-doc and then read the somewhat localized apache manual online at: http://localhost/manual/
+
+Basically the apache2-x packages have been renamed to apache-x and the apache (v1.x) packages have been renamed to apache1-x.
+
+* The apache1 packages may not be available on your media.
+
+apache-conf
+-----------
+The most significant changes with this release compared to apache2 up to Mandriva Limited Edition 2005:
+
+    * Less cruft in the apache initscript.
+    * No more switching magic between apache v2.x and apache v1.x.
+    * The /etc/httpd/conf.d directory has been renamed to /etc/httpd/modules.d and should contain only module specific configuration files.
+    * The /etc/httpd/webapps.d directory has been moved to /etc/httpd/conf/webapps.d
+    * A new /etc/httpd/conf/vhosts.d directory has been added, you should simply drop virtual host configuration files in this directory and restart apache.
+    * More standardized and secured configuration: .htaccess files are not considered anymore. If you currently have content secured this way you must activate .htaccess restrictions per directory before firing up this release of apache, otherwise anyone can access your data. http://localhost/~username style access is unaffected by this. If you need it, simply install it. (urpmi apache-mod_userdir)
+    * The commonhttpd.conf and httpd2.conf configuration files have been merged into the single /etc/httpd/conf/httpd.conf file. Make sure you review your old configuration files and make the necessary changes to the single httpd.conf configuration file or elsewhere as suitable. The old config files are provided so it will become easier to determine the possible changes the user might have done. Use something like this to utilize this:
+
+   urpmi diffutils
+
+   diff -u /usr/share/doc/apache-conf-2.0.54/old_config/httpd2.conf-10.0 /etc/httpd/conf/httpd2.conf.rpmsave > /etc/httpd/conf/httpd2.conf.diff
+   diff -u /usr/share/doc/apache-conf-2.0.54/old_config/commonhttpd.conf-10.0 /etc/httpd/conf/commonhttpd.conf.rpmsave > /etc/httpd/conf/commonhttpd.conf.diff
+
+    * The default start page simply says "It works!".
+    * A new /etc/httpd/conf/fileprotector.conf configuration file was added to protect various types of web code from theft in case of murphy's law.
+
+mod_perl
+--------
+mod_perl has been upgraded to v2.0.1 (stable) with many API changes that are outlined in detail at the mod_perl web site: http://perl.apache.org/
+
+php
+---
+The php suite has been upgraded to v5.0.4 (stable). If you experience problem with php-5.0.4 you can install the latest php-4.4.0 (*) packages (urpmi apache-mod_php4).
+
+A new feature with our packaging of php is that it is possible to rebuild php using the Hardening Patch (v0.4.1) by the Hardened-PHP Project http://www.hardened-php.net/ like so: rpm --rebuild --with hardened php-5.0.4-9mdk.src.rpm. If so, you will have to rebuild all php-* extensions needed and also apache-mod_php against the Hardened-PHP enabled php library, and also will have to live with the fact that commercial extensions will not work anymore. This is not supported by Mandriva Linux, but we felt it was worth mentioning due the increasing number of security holes in popular php applications. We cannot ship our php packages with this patch applied because of the strict php license.
+
+Basically the php5-x packages have been renamed to php-x and the php-4.x packages have been renamed to php4-x.
+
+* The php4-x packages may not be available on your media.
+
+OpenLDAP
+--------
+OpenLDAP has been upgraded to the 2.3.x branch. The upgrade procedure will attempt to convert the database to the new format by dumping and reloading it. Errors, if any, will be reported and a backup of the old database is kept around. The 2.3.x branch has many exciting new features, including, but not limited to:
+
+    * syncrepl replication engine, much more robust than slurpd;
+          o consumers (aka "slaves") can be added without changing a thing on the server;
+          o consumers ("slaves") don't need to be in sync with the provider ("master") before starting the replication. It can take care of itself;
+    * dynamic configuration backend: the slapd configuration can now reside inside ldap itself, which means acls and other configuration options (such as schema) can be changed on the fly via standard ldap commands instead of changing a configuration file and restarting the server;
+    * password policy overlay: the server can now enforce a given password policy (until today, it was the client's job (!) to do it [think pam_ldap]).
+    * many other interesting overlays, like the unique one which contains some attributes to have unique values across a subtree.
+
+Mandriva 2006 is being shipped with OpenLDAP-2.3.6 + some patches. During the 2.3.x branch lifecycle, as it matures, official updates will be issued to Mandriva 2006 users.
+
+Development
+===========
+Packaging
+---------
+New macros have been added, taken from Conectiva and from pld amongst others. You will find a macro for python ( %pydir, etc ), and a macro to skip some building phase. ( http://archives.mandrivalinux.com/cooker/2005-06/msg00408.php )
+
+Php-pear requires and provides are now automatically generated, like perl and mono.
+
+The rpm package has also been cleaned and updated, and now uses /etc/rpm/macros.d/ for easy macro definition.
+
+Compilers
+---------
+Gcc has been updated to the 4.0 version. If you have some trouble to compile your code, you can either use gcc3 from contribs, or take a look at this document: http://dev.gentoo.org/~vanquirius/gcc4-porting-guide.html
+
+Packages
+========
+For more details, see /usr/share/doc/mandriva-release-2006.0/MandrivaLinux2006Packages.txt or http://qa.mandriva.com/twiki/bin/view/Main/MandrivaLinux2006Packages
+
+Task oriented package
+---------------------
+Conectiva task packages have been introduced. They are meta packages ( i.e. an empty package that requires other packages ), and allow to quickly set up a type of software. For now, only a small subset of packages are proposed :
+
+task-c-devel 	C development
+task-c++-devel 	C++ development
+task-gnome 	Gnome environment
+task-kde 	Kde environment
+task-kde-devel 	Kde development
+
+You can use urpmq -d task-package to see what will be installed.
+
+Package of e 17
+---------------
+Many new packages have been added and updated, but the one that was requested most often is Enlightenment DR17 ( http://www.enlightenment.org/ ). You can find it in the contrib section, by using "urpmi e".

@@ -1,0 +1,55 @@
+--- mergemaf	2005-11-10 10:44:15.000000000 +0100
++++ /home/pomerol/rousse/work/dev/inria/public/sxpipe/cc2dag/mergemaf	2005-11-09 17:27:56.000000000 +0100
+@@ -9,7 +9,7 @@
+ use Lingua::MAF;
+ use XML::Twig;
+ use IO::File;
+-use List::Util qw/max/;
++use List::Util qw/min max/;
+ use List::MoreUtils qw/all any/;
+ 
+ my (@format, $verbose);
+@@ -153,16 +153,21 @@
+ 		    print STDERR "document $struct->{id}: " . scalar @{$struct->{list}} . " transitions\n" if $verbose;
+ 		}
+ 
+-		# extract maximum transition index
+-		my $target = 0;
++		# get each set of transitions span
++		my $span = 0;
+ 		foreach my $struct (@structs) {
+-		    $struct->{target} =
++		    my $min =
++			min
++			map { $_->att('source') }
++			@{$struct->{list}};
++		    my $max =
+ 			max
+ 			map { $_->att('target') }
+ 			@{$struct->{list}};
+-		    $target = $struct->{target} if $struct->{target} > $target;
++		    $struct->{span} = $max - $min;
++		    $span = $struct->{span} if $struct->{span} > $span;
+ 		}
+-		print STDERR "max transition target: $target\n" if $verbose;
++		print STDERR "max transition span: $span\n" if $verbose;
+ 
+ 		# add transitions
+ 		foreach my $struct (@structs) {
+@@ -171,12 +176,12 @@
+ 			my $transition = $struct->{list}->[$i];
+ 			my $source = $transition->att('source') + $struct->{offset};
+ 			# special case for last transition
+-			if ($i == $#{$struct->{list}} && $struct->{target} != $target) {
++			if ($i == $#{$struct->{list}} && $struct->{span} != $span) {
+ 			    # introduce offset if needed
+-			    $struct->{offset} = $target - $struct->{target};
+-			    print STDERR "setting offset to $struct->{offset}\n" if $verbose;
++			    $struct->{offset} += $span - $struct->{span};
++			    print STDERR "setting offset in document $struct->{id} to $struct->{offset}\n" if $verbose;
+ 			}
+-			my $target = $transition->att('target') + ($struct->{offset} || 0);
++			my $target = $transition->att('target') + $struct->{offset};
+ 			my $word_form = $transition->first_child();
+ 			$maf->add_word_form(
+ 			    source => $source,

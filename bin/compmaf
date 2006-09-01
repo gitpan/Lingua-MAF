@@ -1,0 +1,200 @@
+#!/usr/bin/perl
+# $Id: compmaf,v 1.1 2005/06/22 15:23:44 rousse Exp $
+# merge two maf files
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use Lingua::MAF;
+use XML::Twig;
+use IO::File;
+use List::Util qw/min max/;
+use List::MoreUtils qw/all any/;
+
+my (@format, $verbose);
+GetOptions(
+    'verbose'  => \$verbose
+);
+
+die "usage: compmaf <doc1> <doc2>" unless @ARGV == 2;
+
+my (@documents, $found);
+foreach my $arg (@ARGV) {
+    next unless -r $arg;
+
+    my $file = IO::File->new($arg);
+
+    my $twig = XML::Twig->new(
+	TwigHandlers => {
+	    fsm => sub { $found = $_[1]; }
+	}
+    );
+    $twig->parse_start();
+
+    push(@documents, {
+	file => $file,
+	twig => $twig
+    });
+}
+
+while (@documents) {
+    my @structs;
+
+    # parse all documents
+    for (my $i = 0; $i <= $#documents; $i++) {
+	my $twig = $documents[$i]->{twig};
+	my $file = $documents[$i]->{file};
+	while (my $line = <$file>) {
+	    $twig->parser()->parse_more($line);
+	    if ($found) {
+		$twig->purge();
+		last;
+	    }
+	}
+
+	if ($found) {
+	    # index tokens
+	    my %tokens;
+	    my $tokens;
+	    my $count = 0;
+	    foreach my $token ($found->children('token')) {
+		my $id = $token->att('id');
+		$tokens{$id} = $count;
+		$tokens->[$count] = $token;
+		$count++;
+	    }
+
+	    # index transitions
+	    my $transitions;
+	    foreach my $transition ($found->children('transition')) {
+		my @tokens = split(/ /, $transition->first_child()->att('tokens'));
+		# compute index number of tokens this transition bind
+		my $from = $tokens{$tokens[0]};
+		my $to   = $tokens{$tokens[-1]} + 1;
+		push(
+		    @{$transitions->[$from]->[$to]},
+		    $transition
+		);
+	    }
+	    push(@structs, {
+		id          => $i,
+		tokens      => $tokens,
+		transitions => $transitions,
+		from        => 0, # token range start index
+		to          => 0, # token range end index
+		offset      => 0, # tokens index offset
+	    });
+	    $found = undef;
+	} else {
+	    print STDERR "closing document $i\n" if $verbose;
+	    $documents[$i]->{twig}->parser()->parse_done();
+	    $documents[$i]->{file}->close();
+	    splice(@documents, $i, 1);
+	    $i--;
+	}
+    }
+
+    # analyse result
+    if (@structs) {
+	print STDERR "new comparating sequence\n" if $verbose;
+
+	while (
+	    $structs[0]->{to} <= $#{$structs[0]->{tokens}} &&
+	    $structs[1]->{to} <= $#{$structs[1]->{tokens}}
+	)  {
+	    print STDERR "new pumping sequence\n" if $verbose;
+
+	    my $pos0 = $structs[0]->{to} + $structs[0]->{offset};
+	    my $pos1 = $structs[1]->{to} + $structs[1]->{offset};
+	    do {
+		print STDERR "$pos0 <-> $pos1\n" if $verbose;
+		if ($pos0 <= $pos1) {
+		    advance($structs[0]);
+		    $pos0 = $structs[0]->{to} + $structs[0]->{offset};
+		} else {
+		    advance($structs[1]);
+		    $pos1 = $structs[1]->{to} + $structs[1]->{offset};
+		}
+	    } while ($pos0 != $pos1);
+
+	    print STDERR "initial alignment: $structs[0]->{to} <-> $structs[1]->{to}\n" if $verbose;
+
+	    my $text0 = $structs[0]->{tokens}->[$structs[0]->{to} - 1]->text();
+	    my $text1 = $structs[1]->{tokens}->[$structs[1]->{to} - 1]->text();
+	    while ($text0 ne $text1) {
+		print STDERR "$pos0 <-> $pos1\n" if $verbose;
+		if (length($text0) < length($text1)) {
+		    advance($structs[0]);
+		    $text0 .= ' ' . $structs[0]->{tokens}->[$structs[0]->{to} - 1]->text();
+		    $structs[1]->{offset}++;
+		} else {
+		    advance($structs[1]);
+		    $text1 .= ' ' . $structs[1]->{tokens}->[$structs[1]->{to} - 1]->text();
+		    $structs[0]->{offset}++;
+		}
+	    }
+
+	    print STDERR "final alignment: $structs[0]->{to} <-> $structs[1]->{to}\n" if $verbose;
+
+
+	    # index all transitions in a single flat list
+	    foreach my $struct (@structs) {
+		for my $i ($struct->{from} .. $struct->{to} - 1) {
+		    for my $j (0 .. $#{$struct->{transitions}->[$i]}) {
+			my $transitions = $struct->{transitions}->[$i]->[$j];
+			next unless $transitions;
+			push(@{$struct->{list}}, @{$transitions});
+		    }
+		}
+		print STDERR "document $struct->{id}: " . scalar @{$struct->{list}} . " transitions\n" if $verbose;
+	    }
+
+	    foreach my $transition (@{$structs[0]->{list}}) {
+		my $match;
+		my $wordform = $transition->first_child();
+		my $tag   = $wordform->att('tag');
+		my $lemma = $wordform->att('entry');
+		$lemma =~ s/^.*://;
+		foreach my $other_transition (@{$structs[1]->{list}}) {
+		    my $other_wordform = $other_transition->first_child();
+		    my $other_tag   = $other_wordform->att('tag');
+		    my $other_lemma = $other_wordform->att('entry');
+		    $other_lemma =~ s/^.*://;
+		    if ($tag eq $other_tag && $lemma eq $other_lemma) {
+			$match = $other_transition;
+			last;
+		    }
+		}
+		if ($match) {
+		    print "found: $lemma, $tag\n";
+		} else {
+		    print "not found: $lemma, $tag\n";
+		}
+	    }
+
+	    # reset each structure
+	    foreach my $struct (@structs) {
+		$struct->{list} = [];
+		$struct->{from} = $struct->{to};
+	    }
+	}
+    }
+}
+
+sub advance {
+    my ($struct) = @_;
+
+    my $i = $struct->{to};
+    $struct->{to}++;
+
+    # check all other transitions starting from interval
+    while ($i < $struct->{to}) {
+	my $to = $#{$struct->{transitions}->[$i]};
+	# push interval end if needed
+	if ($to > $struct->{to}) {
+	    $struct->{to} = $to;
+	}
+    $i++;
+    }
+}
